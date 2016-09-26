@@ -3,8 +3,8 @@ module Crypto.Math.DiscreteLog (
   , find_gamma
   , pollard_rho_floyd
   , check_log
-  , check_is_generator_in_zmodn'_mult
-  , check_order_in_zmodn'_mult
+  , check_is_generator_in_zmodm_mult
+  , check_order_in_zmodm_mult
   ) where
 
 import Data.Maybe (listToMaybe)
@@ -14,41 +14,41 @@ example_log = gamma
   -- solve 2^gamma = 5 (mod 1019)
   where
     n = 1018  :: Int
-    n' = n + 1
+    m = n + 1
     alpha = 2 :: Int
     beta = 5  :: Int
-    gamma = solve_discrete_log n n' alpha beta
+    gamma = solve_discrete_log n m alpha beta
 
 example_log_check = case gamma of
   -- check whether the computed logarithm is correct
     Nothing -> False
-    Just g -> check_log alpha beta g n'
+    Just g -> check_log alpha beta g m
   where
     n = 1018  :: Int
-    n' = n + 1
+    m = n + 1
     alpha = 2 :: Int
     beta = 5  :: Int
-    gamma = solve_discrete_log n n' alpha beta
+    gamma = solve_discrete_log n m alpha beta
 
-check_log alpha beta gamma n' = ((alpha ^ gamma) `mod` n') == (beta `mod` n')
+check_log alpha beta gamma m = ((alpha ^ gamma) `mod` m) == (beta `mod` m)
 
 solve_discrete_log :: (Integral n) => n -> n -> n -> n -> Maybe n
-solve_discrete_log n n' alpha beta = gamma
+solve_discrete_log n m alpha beta = gamma
   where
-    (at, bt, ah, bh) = pollard_rho_floyd n n' alpha beta
+    (at, bt, ah, bh) = pollard_rho_floyd n m alpha beta
     gamma = find_gamma n at bt ah bh
 
 
-check_is_generator_in_zmodn'_mult x n' = order == (n' - 1)
+check_is_generator_in_zmodm_mult x m = order == (m - 1)
   where
-    order = check_order_in_zmodn'_mult x n'
+    order = check_order_in_zmodm_mult x m
 
-check_order_in_zmodn'_mult x n' = order
-  -- check order of x in the multiplicative cyclic group of integers modulo n'
+check_order_in_zmodm_mult x m = order
+  -- check order of x in the multiplicative cyclic group of integers modulo m
   where
-    xmod = x `mod` n' -- otherwise doing e.g.
-    -- something check_is_generator_in_zmodn'_mult 3 3 hangs.
-    cycle = xmod:(takeWhile (/= xmod) (map (\v -> (xmod * v) `mod` n') cycle))
+    xmod = x `mod` m -- otherwise doing e.g.
+    -- something check_is_generator_in_zmodm_mult 3 3 hangs.
+    cycle = xmod:(takeWhile (/= xmod) (map (\v -> (xmod * v) `mod` m) cycle))
     -- cycle: the oscillating cycle of x^k for k = 1, 2, ...
     cycle_indexed = zip [1..] cycle
     first_unit = head $ dropWhile ((/= 1).snd) $ cycle_indexed
@@ -71,24 +71,24 @@ pollard_rho_floyd'
   => Int -- i -- loop number -- FIXME: terminate if i > n (or i >= n ?)
   -> t -> t -> t -- tortoise x, a, b
   -> t -> t -> t -- hare x, a, b
-  -> t -- n -- FIXME: currently supports alpha coprime to n';
-  -- however, this should be the order of alpha in Z_{n'}^*
-  -> t -- n' = n+1, a prime
+  -> t -- n -- FIXME: currently supports alpha coprime to m;
+  -- however, this should be the order of alpha in Z_m^*
+  -> t -- m = n+1, a prime
   -> t -> t -- alpha, beta such that alpha^gamma == beta
   -> (t, t, t, t) -- tortoise a, tortoise b, hare a, hare b
 
-pollard_rho_floyd' i xt at bt xh ah bh n n' alpha beta =
+pollard_rho_floyd' i xt at bt xh ah bh n m alpha beta =
   if new_xt == new_xh
     then
       (new_at, new_bt, new_ah, new_bh)
     else
       pollard_rho_floyd'
-        (i+1) new_xt new_at new_bt new_xh new_ah new_bh n n' alpha beta
+        (i+1) new_xt new_at new_bt new_xh new_ah new_bh n m alpha beta
   where
     (new_xt, new_at, new_bt) = new_xab (xt, at, bt)
     (new_xh, new_ah, new_bh) = new_xab.new_xab $ (xh, ah, bh)
 
     new_xab (x, a, b) = case x `mod` 3 of
-      0 -> (x*x     `mod` n', (a*2) `mod` n, (b*2) `mod` n)
-      1 -> (x*alpha `mod` n', (a+1) `mod` n,  b           )
-      2 -> (x*beta  `mod` n',  a           , (b+1) `mod` n)
+      0 -> (x*x     `mod` m, (a*2) `mod` n, (b*2) `mod` n)
+      1 -> (x*alpha `mod` m, (a+1) `mod` n,  b           )
+      2 -> (x*beta  `mod` m,  a           , (b+1) `mod` n)
