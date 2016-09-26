@@ -23,7 +23,6 @@ isPrime n = loop 2 where
 check_log_qc alpha beta gamma m = ((alpha ^ gamma) `mod` m) === (beta `mod` m)
 
 prop_guess_gamma n alpha gamma =
-  verbose.(within (2 * 1000 * 1000)) $
   (n > 1) ==>
   (alpha > 1) ==>
   (alpha < m) ==>
