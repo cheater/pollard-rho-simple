@@ -3,7 +3,11 @@ module Crypto.Math.DiscreteLog (
   , find_gamma
   , pollard_rho_floyd
   , check_log
+  , check_is_generator_in_zmodn'_mult
+  , check_order_in_zmodn'_mult
   ) where
+
+import Data.Maybe (listToMaybe)
 
 
 example_log = gamma
@@ -15,8 +19,10 @@ example_log = gamma
     beta = 5  :: Int
     gamma = solve_discrete_log n n' alpha beta
 
-example_log_check = check_log alpha beta gamma n'
+example_log_check = case gamma of
   -- check whether the computed logarithm is correct
+    Nothing -> False
+    Just g -> check_log alpha beta g n'
   where
     n = 1018  :: Int
     n' = n + 1
@@ -24,30 +30,52 @@ example_log_check = check_log alpha beta gamma n'
     beta = 5  :: Int
     gamma = solve_discrete_log n n' alpha beta
 
-check_log alpha beta gamma n' = (alpha ^ gamma) `mod` n' == beta `mod` n'
+check_log alpha beta gamma n' = ((alpha ^ gamma) `mod` n') == (beta `mod` n')
 
-solve_discrete_log :: Int -> Int -> Int -> Int -> Int
+solve_discrete_log :: (Integral n) => n -> n -> n -> n -> Maybe n
 solve_discrete_log n n' alpha beta = gamma
   where
     (at, bt, ah, bh) = pollard_rho_floyd n n' alpha beta
     gamma = find_gamma n at bt ah bh
 
-find_gamma n at bt ah bh = head $ filter pred [0..n]
+
+check_is_generator_in_zmodn'_mult x n' = order == (n' - 1)
+  where
+    order = check_order_in_zmodn'_mult x n'
+
+check_order_in_zmodn'_mult x n' = order
+  -- check order of x in the multiplicative cyclic group of integers modulo n'
+  where
+    xmod = x `mod` n' -- otherwise doing e.g.
+    -- something check_is_generator_in_zmodn'_mult 3 3 hangs.
+    cycle = xmod:(takeWhile (/= xmod) (map (\v -> (xmod * v) `mod` n') cycle))
+    -- cycle: the oscillating cycle of x^k for k = 1, 2, ...
+    cycle_indexed = zip [1..] cycle
+    first_unit = head $ dropWhile ((/= 1).snd) $ cycle_indexed
+    -- first_unit: the first time we get 1
+    order = fst first_unit -- ord: the lowest k such that x^k == 1
+
+find_gamma n at bt ah bh = safeHead $ filter pred [0..n]
   where
     b_diff = (bh - bt) `mod` n
     a_diff = (at - ah) `mod` n
     pred gamma = (b_diff * gamma) `mod` n == a_diff
+    safeHead = listToMaybe
+
+pollard_rho_floyd :: (Integral t) => t -> t -> t -> t -> (t, t, t, t)
 
 pollard_rho_floyd = pollard_rho_floyd' 1 1 0 0 1 0 0
 
 pollard_rho_floyd'
-  :: Int -- i -- loop number -- FIXME: should terminate if i > n (or i >= n ?)
-  -> Int -> Int -> Int -- tortoise x, a, b
-  -> Int -> Int -> Int -- hare x, a, b
-  -> Int -- n
-  -> Int -- n' = n+1, a prime
-  -> Int -> Int -- alpha, beta such that alpha^gamma == beta
-  -> (Int, Int, Int, Int) -- tortoise a, tortoise b, hare a, hare b
+  :: (Integral t)
+  => Int -- i -- loop number -- FIXME: terminate if i > n (or i >= n ?)
+  -> t -> t -> t -- tortoise x, a, b
+  -> t -> t -> t -- hare x, a, b
+  -> t -- n -- FIXME: currently supports alpha coprime to n';
+  -- however, this should be the order of alpha in Z_{n'}^*
+  -> t -- n' = n+1, a prime
+  -> t -> t -- alpha, beta such that alpha^gamma == beta
+  -> (t, t, t, t) -- tortoise a, tortoise b, hare a, hare b
 
 pollard_rho_floyd' i xt at bt xh ah bh n n' alpha beta =
   if new_xt == new_xh
